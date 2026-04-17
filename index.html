@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaunchFS - Collision Update</title>
+    <title>LaunchFS - Stable Build</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
@@ -22,8 +22,8 @@ const MOON_SIZE = 1400;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
-  for (let i = 0; i < 600; i++) {
-    stars.push({x: random(-10000, 10000), y: random(-40000, 2000), s: random(0.5, 3), b: random(150, 255)});
+  for (let i = 0; i < 500; i++) {
+    stars.push({x: random(-10000, 10000), y: random(-40000, 2000), s: random(1, 3)});
   }
   moonPos = createVector(5000, MOON_ALT);
   resetFlight();
@@ -41,131 +41,97 @@ function draw() {
 }
 
 function drawHome() {
-  background(5, 8, 15);
-  noStroke();
-  for(let s of stars) { fill(255, s.b * 0.5); circle(s.x/15 + width/2, s.y/15 + height/2, s.s); }
-  textAlign(CENTER);
-  fill(255); textSize(70); text("LAUNCH FS", width/2, height/3);
-  fill(0, 150, 255); textSize(18); text("ADVANCED AEROSPACE SIMULATOR", width/2, height/3 + 50);
-  fill(0, 90, 210); rect(width/2 - 110, height/2 - 30, 220, 60, 30);
-  fill(255); textSize(24); text("NEW MISSION", width/2, height/2 + 8);
+  background(10, 15, 25);
+  fill(255); textAlign(CENTER);
+  textSize(60); text("LaunchFS", width/2, height/3);
+  textSize(18); text("Q/E: STEER | SHIFT/CTRL: THROTTLE | SPACE: IGNITE", width/2, height/3 + 50);
+  fill(0, 120, 255); rect(width/2 - 100, height/2, 200, 60, 10);
+  fill(255); textSize(24); text("START", width/2, height/2 + 38);
 }
 
 function drawEditor() {
-  background(12);
-  stroke(35);
+  background(20); stroke(40);
   for (let x = 160; x < width; x += GRID_SIZE) line(x, 0, x, height);
   for (let y = 0; y < height; y += GRID_SIZE) line(160, y, width, y);
   for (let p of parts) drawPart(p, 160 + p.gx*GRID_SIZE, p.gy*GRID_SIZE, false);
   
-  noStroke(); fill(20); rect(0, 0, 160, height);
-  // Re-ordered menu to ensure Cone is visible
+  noStroke(); fill(30); rect(0, 0, 160, height);
   let menu = ['CAPSULE', 'CONE', 'TANK_MED', 'TANK_LRG', 'ENG_MED', 'ENG_LRG', 'SEP', 'DELETE'];
   for (let i = 0; i < menu.length; i++) {
-    let isDel = menu[i] === 'DELETE';
-    fill(currentPart === menu[i] ? (isDel ? [180, 40, 40] : [0, 110, 230]) : 40);
-    rect(10, 10 + i * 52, 140, 48, 4);
-    fill(255); textSize(10); textAlign(CENTER); text(menu[i], 80, 38 + i * 52);
+    fill(currentPart === menu[i] ? [0, 120, 255] : 60);
+    rect(10, 10 + i * 52, 140, 48, 5);
+    fill(255); textSize(10); textAlign(CENTER); text(menu[i], 80, 40 + i * 52);
   }
-  fill(70); rect(10, height-60, 140, 45, 5); fill(255); text("HOME", 80, height-32);
-  fill(0, 160, 70); rect(width-160, 20, 140, 60, 10); fill(255); textSize(18); text("LAUNCH", width-90, 56);
-  if(mouseX > 160) { fill(255, 30); rect(floor(mouseX/GRID_SIZE)*GRID_SIZE, floor(mouseY/GRID_SIZE)*GRID_SIZE, GRID_SIZE, GRID_SIZE); }
+  fill(100); rect(10, height-60, 140, 45, 5); fill(255); text("HOME", 80, height-32);
+  fill(0, 200, 100); rect(width-150, 20, 130, 60, 10); fill(255); text("LAUNCH", width-85, 55);
 }
 
 function drawFlight() {
   let alt = abs(pos.y);
-  let sky = lerpColor(color(70, 130, 230), color(0, 2, 10), map(alt, 0, 10000, 0, 1));
-  background(sky);
+  background(lerpColor(color(100, 180, 255), color(0), map(alt, 0, 8000, 0, 1)));
   
   push();
   translate(width/2, height/2); translate(-pos.x, -pos.y + height/4);
-  noStroke(); for(let s of stars) { fill(255, s.b); circle(s.x, s.y, s.s); }
+  fill(255); noStroke(); for(let s of stars) circle(s.x, s.y, s.s);
   
   // Moon
-  fill(230); stroke(190); circle(moonPos.x, moonPos.y, MOON_SIZE);
-  noStroke(); fill(190); for(let i=0; i<8; i++) circle(moonPos.x + cos(i)*400, moonPos.y + sin(i)*300, 150);
+  fill(200); circle(moonPos.x, moonPos.y, MOON_SIZE);
 
   // Ground
-  fill(25, 28, 35); rect(-20000, 25, 40000, 5000); 
-  fill(80); rect(-200, 20, 400, 10); 
+  fill(50); rect(-10000, 25, 20000, 2000); 
 
-  // Collision & Physics
+  // Physics & Collision
   let dMoon = dist(pos.x, pos.y, moonPos.x, moonPos.y);
-  
-  // Moon Collision
-  if (dMoon < MOON_SIZE/2 + 20) { 
-      if (vel.mag() > 6) { background(255, 0, 0); resetFlight(); state='EDITOR'; } // CRASH
-      vel.mult(0.5); 
-      if(dMoon < MOON_SIZE/2) pos.sub(vel); 
-  } 
-  // Earth Collision
-  else if (pos.y >= 0) {
-      if (vel.y > 5) { background(255, 0, 0); resetFlight(); state='EDITOR'; } // CRASH
+  if (dMoon < MOON_SIZE/2 + 10) {
+      if (vel.mag() > 5) { resetFlight(); state = 'EDITOR'; } // Crash Moon
+      vel.mult(0.5); if(dMoon < MOON_SIZE/2) pos.sub(vel);
+  } else if (pos.y >= 0) {
+      if (vel.y > 5) { resetFlight(); state = 'EDITOR'; } // Crash Ground
       vel.y = 0; vel.x *= 0.8; pos.y = 0;
-  }
-  // Space Gravity
-  else {
-      vel.add(0, 0.13); // Earth Gravity
-      if(dMoon < 4000) vel.add(p5.Vector.sub(moonPos, pos).normalize().mult(0.3));
+  } else {
+      vel.add(0, 0.12); // Gravity
+      if(dMoon < 3000) vel.add(p5.Vector.sub(moonPos, pos).normalize().mult(0.2));
   }
 
-  if (chuteDeployed) {
-      vel.y *= 0.93; vel.x *= 0.96;
-      stroke(220); line(pos.x, pos.y, pos.x - 15, pos.y - 80); line(pos.x, pos.y, pos.x + 15, pos.y - 80);
-      fill(200, 0, 0); arc(pos.x, pos.y - 80, 90, 70, PI, 0, CHORD);
-  }
+  // Steering & Throttle Logic
+  if (keyIsDown(81)) angle -= 0.05; // Q
+  if (keyIsDown(69)) angle += 0.05; // E
+  if (keyIsDown(SHIFT)) throttle = min(throttle + 0.02, 1);
+  if (keyIsDown(CONTROL)) throttle = max(throttle - 0.02, 0);
 
   if (isIgnited && fuel > 0) {
     for (let p of parts) {
       if (p.type.startsWith('ENG') && p.active) {
-        let pwr = p.type === 'ENG_LRG' ? 0.8 : 0.45;
+        let pwr = p.type === 'ENG_LRG' ? 0.7 : 0.4;
         vel.add(p5.Vector.fromAngle(angle - HALF_PI).mult(throttle * pwr));
         fuel -= throttle * pwr * 0.1;
-        fill(255, 150, 0, 200); circle(pos.x + (p.gx-parts[0].gx)*30 + 15, pos.y + (p.gy-parts[0].gy)*30 + 30, throttle * 40);
+        fill(255, 100, 0); circle(pos.x + (p.gx-parts[0].gx)*30 + 15, pos.y + (p.gy-parts[0].gy)*30 + 30, throttle * 40);
       }
     }
   }
+
+  if (chuteDeployed) { vel.y *= 0.95; fill(255, 0, 0); arc(pos.x, pos.y - 60, 80, 60, PI, 0); }
 
   pos.add(vel);
   push(); translate(pos.x, pos.y); rotate(angle);
   let ox = parts[0].gx, oy = parts[0].gy;
   for (let p of parts) drawPart(p, (p.gx-ox)*30, (p.gy-oy)*30, p.active);
   pop(); pop();
-  drawFlightUI();
+
+  // UI
+  fill(0, 150); rect(10, 10, 180, 120, 10);
+  fill(255); textAlign(LEFT); text("ALT: " + floor(alt), 25, 40);
+  text("V-VEL: " + nf(vel.y, 1, 1), 25, 70);
+  text("THR: " + floor(throttle * 100) + "%", 25, 100);
 }
 
 function drawPart(p, x, y, active) {
-  stroke(0); strokeWeight(1);
-  if (p.type === 'CAPSULE') { 
-    fill(160); rect(x, y, 30, 30, 12, 12, 2, 2); 
-    fill(0, 100, 200); circle(x+15, y+10, 10); 
-  }
-  else if (p.type === 'CONE') {
-    fill(180, 50, 50); triangle(x, y+30, x+30, y+30, x+15, y);
-  }
-  else if (p.type.startsWith('TANK')) { 
-    let h = p.type === 'TANK_LRG' ? 60 : 40;
-    fill(240); rect(x, y, 30, h); 
-    stroke(0, 40); line(x+15, y, x+15, y+h); // Metallic texture
-  }
-  else if (p.type.startsWith('ENG')) { 
-    fill(40); rect(x+6, y, 18, 12);
-    fill(active ? [255, 150, 0] : 80); arc(x+15, y+28, 26, 22, PI, 0); 
-  }
-  else if (p.type === 'SEP') { fill(220, 180, 0); rect(x, y+10, 30, 10); }
-}
-
-function drawFlightUI() {
-  fill(0, 160); noStroke(); rect(15, 15, 190, 140, 10);
-  fill(255); textAlign(LEFT); textSize(13);
-  text("ALT: " + floor(abs(pos.y)) + " m", 30, 45);
-  text("V-VEL: " + nf(vel.y, 1, 1), 30, 75);
-  text("FUEL: " + floor(max(0, fuel)), 30, 105);
-  fill(0, 160); rect(width-175, 15, 160, 160, 10);
-  let mx = map(moonPos.x - pos.x, -12000, 12000, width-175, width-15);
-  let my = map(moonPos.y - pos.y, -25000, 5000, 15, 175);
-  fill(200); circle(mx, my, 20); fill(0, 255, 100); circle(width-95, 95, 7);
-  fill(50); rect(width-90, height-55, 80, 45, 10); fill(255); textAlign(CENTER); text("EXIT", width-50, height-27);
+  stroke(0);
+  if (p.type === 'CAPSULE') { fill(200); rect(x, y, 30, 30, 5); }
+  else if (p.type === 'CONE') { fill(150, 0, 0); triangle(x, y+30, x+30, y+30, x+15, y); }
+  else if (p.type.startsWith('TANK')) { fill(255); rect(x, y, 30, p.type === 'TANK_LRG' ? 60 : 40); }
+  else if (p.type.startsWith('ENG')) { fill(active ? [255, 150, 0] : 80); rect(x+5, y, 20, 20); }
+  else if (p.type === 'SEP') { fill(255, 200, 0); rect(x, y+10, 30, 10); }
 }
 
 function mousePressed() {
@@ -178,15 +144,14 @@ function mousePressed() {
         let m = ['CAPSULE', 'CONE', 'TANK_MED', 'TANK_LRG', 'ENG_MED', 'ENG_LRG', 'SEP', 'DELETE'];
         if(idx >= 0 && idx < m.length) currentPart = m[idx];
       }
-    } else if (mouseX > width-160 && mouseY < 80) {
-      if(parts.length > 0) { state = 'FLIGHT'; fuel = parts.length * 400; pos.y = -80; }
+    } else if (mouseX > width-150 && mouseY < 80) {
+      if(parts.length > 0) { state = 'FLIGHT'; fuel = parts.length * 300; pos.y = -80; }
     } else {
       let gx = floor((mouseX-160)/GRID_SIZE), gy = floor(mouseY/GRID_SIZE);
       if (currentPart === 'DELETE') parts = parts.filter(p => !(p.gx === gx && p.gy === gy));
       else parts.push({type: currentPart, gx, gy, active: false});
     }
   } else if (state === 'FLIGHT') {
-    if (mouseX > width-90 && mouseY > height-55) { state = 'EDITOR'; resetFlight(); }
     let mx = mouseX - width/2 + pos.x, my = mouseY - height/2 + pos.y - height/4;
     for(let p of parts) {
       let px = (p.gx-parts[0].gx)*30, py = (p.gy-parts[0].gy)*30;
@@ -198,8 +163,8 @@ function mousePressed() {
 function keyPressed() {
   if (state === 'FLIGHT') {
     if (keyCode === 32) isIgnited = !isIgnited;
-    if (key === 'p' || key === 'P') chuteDeployed = true;
-    if (key === 's' || key === 'S') {
+    if (key === 'p') chuteDeployed = true;
+    if (key === 's') {
         let sepY = -1;
         for(let i=parts.length-1; i>=0; i--) if(parts[i].type === 'SEP') { sepY = parts[i].gy; parts.splice(i, 1); break; }
         if(sepY != -1) parts = parts.filter(p => p.gy < sepY);
