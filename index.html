@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaunchFS - Stable Build</title>
+    <title>LaunchFS - Control Update</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: sans-serif; }
@@ -74,28 +74,27 @@ function drawFlight() {
   translate(width/2, height/2); translate(-pos.x, -pos.y + height/4);
   fill(255); noStroke(); for(let s of stars) circle(s.x, s.y, s.s);
   
-  // Moon
-  fill(200); circle(moonPos.x, moonPos.y, MOON_SIZE);
-
-  // Ground
-  fill(50); rect(-10000, 25, 20000, 2000); 
+  fill(200); circle(moonPos.x, moonPos.y, MOON_SIZE); // Moon
+  fill(50); rect(-10000, 25, 20000, 2000); // Ground
 
   // Physics & Collision
   let dMoon = dist(pos.x, pos.y, moonPos.x, moonPos.y);
   if (dMoon < MOON_SIZE/2 + 10) {
-      if (vel.mag() > 5) { resetFlight(); state = 'EDITOR'; } // Crash Moon
+      if (vel.mag() > 5) { resetFlight(); state = 'EDITOR'; } 
       vel.mult(0.5); if(dMoon < MOON_SIZE/2) pos.sub(vel);
   } else if (pos.y >= 0) {
-      if (vel.y > 5) { resetFlight(); state = 'EDITOR'; } // Crash Ground
+      if (vel.y > 5) { resetFlight(); state = 'EDITOR'; } 
       vel.y = 0; vel.x *= 0.8; pos.y = 0;
   } else {
-      vel.add(0, 0.12); // Gravity
+      vel.add(0, 0.12); 
       if(dMoon < 3000) vel.add(p5.Vector.sub(moonPos, pos).normalize().mult(0.2));
   }
 
-  // Steering & Throttle Logic
+  // Steering (Q/E)
   if (keyIsDown(81)) angle -= 0.05; // Q
   if (keyIsDown(69)) angle += 0.05; // E
+  
+  // Throttle (Shift/Ctrl)
   if (keyIsDown(SHIFT)) throttle = min(throttle + 0.02, 1);
   if (keyIsDown(CONTROL)) throttle = max(throttle - 0.02, 0);
 
@@ -118,11 +117,7 @@ function drawFlight() {
   for (let p of parts) drawPart(p, (p.gx-ox)*30, (p.gy-oy)*30, p.active);
   pop(); pop();
 
-  // UI
-  fill(0, 150); rect(10, 10, 180, 120, 10);
-  fill(255); textAlign(LEFT); text("ALT: " + floor(alt), 25, 40);
-  text("V-VEL: " + nf(vel.y, 1, 1), 25, 70);
-  text("THR: " + floor(throttle * 100) + "%", 25, 100);
+  drawFlightUI();
 }
 
 function drawPart(p, x, y, active) {
@@ -132,6 +127,30 @@ function drawPart(p, x, y, active) {
   else if (p.type.startsWith('TANK')) { fill(255); rect(x, y, 30, p.type === 'TANK_LRG' ? 60 : 40); }
   else if (p.type.startsWith('ENG')) { fill(active ? [255, 150, 0] : 80); rect(x+5, y, 20, 20); }
   else if (p.type === 'SEP') { fill(255, 200, 0); rect(x, y+10, 30, 10); }
+}
+
+function drawFlightUI() {
+  // Stats Box
+  fill(0, 150); noStroke(); rect(10, 10, 180, 120, 10);
+  fill(255); textAlign(LEFT); textSize(14);
+  text("ALT: " + floor(abs(pos.y)) + " m", 25, 40);
+  text("V-VEL: " + nf(vel.y, 1, 1), 25, 70);
+  text("FUEL: " + floor(max(0, fuel)), 25, 100);
+
+  // THROTTLE BAR (Vertical)
+  fill(50); rect(20, height/2 - 100, 30, 200, 5); // Background
+  fill(0, 200, 100); rect(20, height/2 + 100, 30, -throttle * 200, 5); // Level
+  fill(255); textAlign(CENTER); textSize(12); text("THR", 35, height/2 + 120);
+
+  // IGNITION BUTTON
+  fill(isIgnited ? [255, 50, 50] : [100, 100, 100]);
+  rect(width - 120, height - 80, 100, 60, 10);
+  fill(255); textAlign(CENTER); textSize(16);
+  text(isIgnited ? "ON" : "IGNITE", width - 70, height - 45);
+
+  // ABORT/EXIT
+  fill(60); rect(width - 120, 20, 100, 40, 5);
+  fill(255); text("EXIT", width - 70, 45);
 }
 
 function mousePressed() {
@@ -145,13 +164,22 @@ function mousePressed() {
         if(idx >= 0 && idx < m.length) currentPart = m[idx];
       }
     } else if (mouseX > width-150 && mouseY < 80) {
-      if(parts.length > 0) { state = 'FLIGHT'; fuel = parts.length * 300; pos.y = -80; }
+      if(parts.length > 0) { state = 'FLIGHT'; fuel = parts.length * 400; pos.y = -80; }
     } else {
       let gx = floor((mouseX-160)/GRID_SIZE), gy = floor(mouseY/GRID_SIZE);
       if (currentPart === 'DELETE') parts = parts.filter(p => !(p.gx === gx && p.gy === gy));
       else parts.push({type: currentPart, gx, gy, active: false});
     }
   } else if (state === 'FLIGHT') {
+    // Check Ignition Button
+    if (mouseX > width-120 && mouseX < width-20 && mouseY > height-80 && mouseY < height-20) {
+      isIgnited = !isIgnited;
+    }
+    // Check Exit Button
+    if (mouseX > width-120 && mouseX < width-20 && mouseY > 20 && mouseY < 60) {
+      state = 'EDITOR'; resetFlight();
+    }
+    // Toggle Engines
     let mx = mouseX - width/2 + pos.x, my = mouseY - height/2 + pos.y - height/4;
     for(let p of parts) {
       let px = (p.gx-parts[0].gx)*30, py = (p.gy-parts[0].gy)*30;
