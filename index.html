@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaunchFS - Pro Edition</title>
+    <title>LaunchFS - Audio Update</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.sound.min.js"></script>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
@@ -15,10 +16,11 @@
 let state = 'HOME'; let parts = []; let currentPart = 'CAPSULE'; 
 let pos, vel, angle, fuel, throttle, isIgnited; let stars = []; 
 const GRID_SIZE = 30; let chuteDeployed = false;
+let moonPos; const MOON_ALT = -18000; const MOON_SIZE = 1400;
 
-let moonPos;
-const MOON_ALT = -18000;
-const MOON_SIZE = 1400;
+// Audio Variables
+let noise, filter, osc, env;
+let musicStarted = false;
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
@@ -26,6 +28,19 @@ function setup() {
     stars.push({x: random(-10000, 10000), y: random(-40000, 2000), s: random(0.5, 3), b: random(150, 255)});
   }
   moonPos = createVector(5000, MOON_ALT);
+  
+  // Setup Engine Sound (Noise)
+  noise = new p5.Noise('brown');
+  noise.amp(0);
+  noise.start();
+  
+  // Setup Music Synth
+  osc = new p5.Oscillator('triangle');
+  env = new p5.Envelope();
+  env.setADSR(0.1, 0.2, 0.1, 0.5);
+  osc.amp(env);
+  osc.start();
+  
   resetFlight();
 }
 
@@ -34,7 +49,30 @@ function resetFlight() {
   angle = 0; throttle = 0; fuel = 0; isIgnited = false; chuteDeployed = false;
 }
 
+function updateAudio() {
+  if (!musicStarted) return;
+
+  // Music Melody Logic (Home & Editor)
+  if (state === 'HOME' || state === 'EDITOR') {
+    if (frameCount % 60 === 0) {
+      let notes = [220, 247, 261, 329, 392]; // A Spacey Pentatonic Scale
+      osc.freq(random(notes));
+      env.play();
+    }
+    noise.amp(0); // Engine off
+  } 
+  // Engine SFX Logic (Flight)
+  else if (state === 'FLIGHT') {
+    if (isIgnited && fuel > 0 && throttle > 0) {
+      noise.amp(map(throttle, 0, 1, 0.05, 0.4));
+    } else {
+      noise.amp(0);
+    }
+  }
+}
+
 function draw() {
+  updateAudio();
   if (state === 'HOME') drawHome();
   else if (state === 'EDITOR') drawEditor();
   else if (state === 'FLIGHT') drawFlight();
@@ -46,14 +84,13 @@ function drawHome() {
   for(let s of stars) { fill(255, s.b * 0.5); circle(s.x/15 + width/2, s.y/15 + height/2, s.s); }
   textAlign(CENTER);
   fill(255); textSize(70); text("LAUNCH FS", width/2, height/3);
-  fill(0, 150, 255); textSize(18); text("Q/E TO STEER | SHIFT/CTRL THROTTLE", width/2, height/3 + 50);
+  fill(0, 150, 255); textSize(18); text("Q/E TO STEER | CLICK START FOR SOUND", width/2, height/3 + 50);
   fill(0, 90, 210); rect(width/2 - 110, height/2 - 30, 220, 60, 30);
-  fill(255); textSize(24); text("NEW MISSION", width/2, height/2 + 8);
+  fill(255); textSize(24); text("START", width/2, height/2 + 8);
 }
 
 function drawEditor() {
-  background(12);
-  stroke(35);
+  background(12); stroke(35);
   for (let x = 160; x < width; x += GRID_SIZE) line(x, 0, x, height);
   for (let y = 0; y < height; y += GRID_SIZE) line(160, y, width, y);
   for (let p of parts) drawPart(p, 160 + p.gx*GRID_SIZE, p.gy*GRID_SIZE, false);
@@ -78,37 +115,25 @@ function drawFlight() {
   translate(width/2, height/2); translate(-pos.x, -pos.y + height/4);
   noStroke(); for(let s of stars) { fill(255, s.b); circle(s.x, s.y, s.s); }
   
-  // Moon Texture
   fill(230); stroke(190); circle(moonPos.x, moonPos.y, MOON_SIZE);
   noStroke(); fill(190); for(let i=0; i<8; i++) circle(moonPos.x + cos(i)*400, moonPos.y + sin(i)*300, 150);
-
-  // Ground
   fill(25, 28, 35); rect(-20000, 25, 40000, 5000); 
-  fill(80); rect(-200, 20, 400, 10); 
 
-  // --- FULL BODY PHYSICS ---
   let lowestY = 0;
   for(let p of parts) {
       let py = (p.gy - parts[0].gy) * 30 + (p.type === 'TANK_LRG' ? 60 : 30);
       if (py > lowestY) lowestY = py;
   }
 
-  let dMoon = dist(pos.x, pos.y, moonPos.x, moonPos.y);
   if (pos.y + lowestY >= 20) {
       if (vel.y > 6) { resetFlight(); state = 'EDITOR'; } 
       vel.y = 0; vel.x *= 0.8; pos.y = 20 - lowestY;
   } else {
       vel.add(0, 0.15); 
-      if(dMoon < 4000) vel.add(p5.Vector.sub(moonPos, pos).normalize().mult(0.3));
   }
   
-  if (dMoon < MOON_SIZE/2 + lowestY) {
-      if (vel.mag() > 6) { resetFlight(); state = 'EDITOR'; }
-      vel.mult(0.5); if(dMoon < MOON_SIZE/2) pos.sub(vel);
-  }
-
-  if (keyIsDown(81)) angle -= 0.05; // Q
-  if (keyIsDown(69)) angle += 0.05; // E
+  if (keyIsDown(81)) angle -= 0.05; 
+  if (keyIsDown(69)) angle += 0.05; 
   if (keyIsDown(SHIFT)) throttle = min(throttle + 0.02, 1);
   if (keyIsDown(CONTROL)) throttle = max(throttle - 0.02, 0);
 
@@ -125,12 +150,6 @@ function drawFlight() {
     fuel -= throttle * pwrSum * 0.04;
   }
 
-  if (chuteDeployed) {
-      vel.y *= 0.93; vel.x *= 0.96;
-      stroke(220); line(pos.x, pos.y, pos.x - 15, pos.y - 80); line(pos.x, pos.y, pos.x + 15, pos.y - 80);
-      fill(200, 0, 0); arc(pos.x, pos.y - 80, 90, 70, PI, 0, CHORD);
-  }
-
   pos.add(vel);
   push(); translate(pos.x, pos.y); rotate(angle);
   let ox = parts[0].gx, oy = parts[0].gy;
@@ -142,8 +161,7 @@ function drawFlight() {
 function drawPart(p, x, y, active) {
   stroke(0); strokeWeight(1);
   if (p.type === 'CAPSULE') { 
-    fill(160); rect(x, y, 30, 30, 12, 12, 2, 2); 
-    fill(0, 100, 200); circle(x+15, y+10, 10); 
+    fill(160); rect(x, y, 30, 30, 12, 12, 2, 2); fill(0, 100, 200); circle(x+15, y+10, 10); 
   }
   else if (p.type === 'CONE') {
     fill(180, 50, 50); triangle(x, y+30, x+30, y+30, x+15, y);
@@ -152,14 +170,12 @@ function drawPart(p, x, y, active) {
   else if (p.type.startsWith('TANK')) { 
     let h = p.type === 'TANK_LRG' ? 60 : 40;
     fill(235); rect(x, y, 30, h); 
-    for(let i=0; i<30; i+=6) { stroke(0, 35); line(x+i, y, x+i, y+h); } // Metal grain
-    noStroke(); fill(0, 25); rect(x+22, y, 8, h); // Side shadow
+    for(let i=0; i<30; i+=6) { stroke(0, 35); line(x+i, y, x+i, y+h); }
+    noStroke(); fill(0, 25); rect(x+22, y, 8, h); 
   }
   else if (p.type.startsWith('ENG')) { 
-    fill(45); rect(x+6, y, 18, 12);
-    fill(active ? [255, 150, 0] : 85); arc(x+15, y+28, 26, 22, PI, 0); 
+    fill(45); rect(x+6, y, 18, 12); fill(active ? [255, 150, 0] : 85); arc(x+15, y+28, 26, 22, PI, 0); 
   }
-  else if (p.type === 'SEP') { fill(220, 180, 0); rect(x, y+10, 30, 10); }
 }
 
 function drawFlightUI() {
@@ -168,20 +184,15 @@ function drawFlightUI() {
   text("ALT: " + floor(abs(pos.y)) + " m", 30, 45);
   text("V-VEL: " + nf(vel.y, 1, 1), 30, 75);
   text("FUEL: " + floor(max(0, fuel)), 30, 105);
-
-  // Throttle Bar
   fill(40); rect(25, height/2 - 100, 25, 200, 5);
   fill(0, 200, 100); rect(25, height/2 + 100, 25, -throttle * 200, 5);
-
-  // Ignition
   fill(isIgnited ? [255, 50, 50] : 80); rect(width - 130, height - 90, 110, 70, 10);
   fill(255); textAlign(CENTER); textSize(16); text(isIgnited ? "ON" : "IGNITE", width - 75, height - 50);
-
-  // Exit
-  fill(60); rect(width-110, 20, 90, 40, 5); fill(255); textSize(14); text("EXIT", width-65, 45);
 }
 
 function mousePressed() {
+  if (!musicStarted) { userStartAudio(); musicStarted = true; }
+  
   if (state === 'HOME') state = 'EDITOR';
   else if (state === 'EDITOR') {
     if (mouseX < 160) {
@@ -193,9 +204,7 @@ function mousePressed() {
       }
     } else if (mouseX > width-160 && mouseY < 80) {
       if(parts.length > 0) { 
-        state = 'FLIGHT'; 
-        fuel = parts.length * 600; 
-        pos.y = -50; 
+        state = 'FLIGHT'; fuel = parts.length * 600; pos.y = -50; 
         for(let p of parts) if(p.type.includes('ENG')) p.active = true;
       }
     } else {
@@ -204,28 +213,10 @@ function mousePressed() {
       else parts.push({type: currentPart, gx, gy, active: false});
     }
   } else if (state === 'FLIGHT') {
-    if (mouseX > width-130 && mouseY > height-90) isIgnited = !isIgnited;
-    if (mouseX > width-110 && mouseY < 60) { state = 'EDITOR'; resetFlight(); }
-    
-    let mx = mouseX - width/2 + pos.x, my = mouseY - height/2 + pos.y - height/4;
-    for(let p of parts) {
-      let px = (p.gx-parts[0].gx)*30, py = (p.gy-parts[0].gy)*30;
-      if(mx > px && mx < px+30 && my > py && my < py+30 && p.type.startsWith('ENG')) p.active = !p.active;
-    }
+    if (mouseX > width - 130 && mouseY > height - 90) isIgnited = !isIgnited;
   }
 }
 
-function keyPressed() {
-  if (state === 'FLIGHT') {
-    if (keyCode === 32) isIgnited = !isIgnited;
-    if (key === 'p') chuteDeployed = true;
-    if (key === 's') {
-        let sepY = -1;
-        for(let i=parts.length-1; i>=0; i--) if(parts[i].type === 'SEP') { sepY = parts[i].gy; parts.splice(i, 1); break; }
-        if(sepY != -1) parts = parts.filter(p => p.gy < sepY);
-    }
-  }
-}
 function windowResized() { createCanvas(windowWidth, windowHeight); }
 </script>
 </body>
